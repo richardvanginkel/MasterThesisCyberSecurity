@@ -1,0 +1,310 @@
+# author: Richard van Ginkel
+# great help from: Bart Roos, from Northwave Intelligent Security Operations, Utrecht, The Netherlands.
+# This is python script that was used in my Master's thesis for Cyber Security at the Radboud University, Nijmegen, The Netherlands.
+# Unlimited usage and distribuation of this code is allowed.
+
+import json
+import math
+import pandas as pd
+import requests
+import csv
+# Install dependency using 'pip install beautifulsoup4'
+from bs4 import BeautifulSoup
+from datetime import date, datetime
+
+# Read vulnerability scan results
+df = pd.read_csv('path/to/results')
+# Create a dictionary from the CSV file
+vulnerabilities_internal = df.to_dict(orient='records')
+df = pd.read_csv('path/to/results')
+# Create a dictionary from the CSV file
+vulnerabilities_external = df.to_dict(orient='records')
+
+#to keep track of the level of exploit existence
+is_exploit = 0
+#to keep track of the level of exploit existence
+remedy = 0
+
+print("\n -------------------------------------------------------------------- \n")
+#create a list of all unique vulnerabilities together with their relevant information
+mylist = []
+for vuln in vulnerabilities_internal:
+    found = False
+    dict = {'ip_address':vuln.get('ip_address'), 'CVE':vuln.get('reference'), 'title':vuln.get('title'), 'cvss2':vuln.get('cvss_v2_score'), 'cvss3':vuln.get('cvss_v3_score'), 'occurence':1, 'date':vuln.get('date_published'),'scan':'int'}
+
+    for l in mylist:
+        if dict.get('title') == l.get('title'):
+            found = True
+            break
+    if not found:
+         mylist.append(dict)
+
+for vuln in vulnerabilities_external:
+    found = False
+    dict = {'ip_address':vuln.get('ip_address'), 'CVE':vuln.get('reference'), 'title':vuln.get('title'), 'cvss2':vuln.get('cvss_v2_score'), 'cvss3':vuln.get('cvss_v3_score'), 'occurence':1, 'date':vuln.get('date_published'), 'scan':'ext'}
+
+    for l in mylist:
+        if dict.get('title') == l.get('title'):
+            found = True
+            break
+    if not found:
+         mylist.append(dict)
+
+
+#open the output file in the write mode
+f = open('results.csv', 'w')
+
+# create the csv writer for output file
+writer = csv.writer(f)
+header = ['CVE','Title', 'CVSS2', 'CVSS3', 'NEW_SCORE', 'EXPLOIT', 'REMEDY', 'AGE']
+writer.writerow(header)
+
+
+index = 0 #to keep track of progress
+new_score = 0 #to sort the vulernabilities on
+extra_list = [] #temporary list we can use to store and sort the vulnerabilities
+today = datetime.today() #to calculate the age of the vulnerability
+
+for i in mylist:
+    index = index +1
+    print(index)
+    date = datetime.strptime(str(i.get('date')), '%Y-%m-%d')
+    delta = (today - date).days
+    if str(i.get('CVE'))=='nan':# if no CVE-ID is known we use the distrubutions of Frei et al, 2006.
+
+        if str(i.get('cvss2')) != 'nan':
+        #calculate the change of an exploit according to the Paretto distrubution by Frei et al.
+            new_score = round(int(i.get('cvss2'))*(1- (math.pow((0.00161/delta),0.26))),1)
+
+
+        elif str(i.get('cvss3')) != 'nan':
+            new_score = round(int(i.get('cvss2')) * (1 - (math.pow((0.00161 / delta), 0.26))),1)
+
+    else:
+        #check for exploitDB
+        # Python code generated using https://curl.trillworks.com/
+
+        cookies = {
+            'CookieConsent': '{stamp:%279S23W2vf0NksGkdoBe/LHu5U8UFy0Yau5828iVtNhKI9oTdh8trbbg==%27%2Cnecessary:true%2Cpreferences:true%2Cstatistics:true%2Cmarketing:true%2Cver:1%2Cutc:1623057979532%2Cregion:%27nl%27}',
+            'XSRF-TOKEN': 'eyJpdiI6IlduelwvbkFtbHBPQ2xXV3k5djRNSG53PT0iLCJ2YWx1ZSI6IkpHNk1cL1VSWE9xRFhTXC9TV2dGV25QY1FKd3hKc2xFZDFrOERKcUlBako5bWFLRHhTUWVjamZXcnVmR1wvXC9WSnNrIiwibWFjIjoiZDJkZTlmYWQ3YjIxZmQwNDI2M2U3MTdkZTE1ZjkzNDA0NTdmNjRjYTM3ODIwMDU1MDRkODc4YjU2NjVkOWQwNiJ9',
+            'exploit_database_session': 'eyJpdiI6IkZDKzRwREN5eEw2Q0dxcWR1ZFdhaWc9PSIsInZhbHVlIjoidUhcL3RyZnQyNDBoMWNPRUdnU2diSjFjMjBadjVZR2VVeXI1XC82aTIraGMwWHgrUzBtYUtGY0FlWHJvSFdpa3ZxIiwibWFjIjoiZDY1YTM2MTMxNzc0MGEzNGQ3YzkwZmZlMzIwYTNkNDJkYTA3MTkyMjgzZGM5MTBmMmVmN2I2N2ExZmY1YmE3ZSJ9',
+        }
+
+        headers = {
+            'authority': 'www.exploit-db.com',
+            'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
+            'sec-ch-ua-mobile': '?0',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36',
+            'accept': 'application/json, text/javascript, */*; q=0.01',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-user': '?1',
+            'sec-fetch-dest': 'empty',
+            'referer': 'https://www.exploit-db.com/search?cve=2017-3141',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8,nl;q=0.7',
+            'Referer': '',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36',
+            'Origin': 'https://www.exploit-db.com',
+            'Upgrade-Insecure-Requests': '1',
+            'x-requested-with': 'XMLHttpRequest',
+        }
+
+        params = (
+            ('cve', '{}'.format(str(i.get('CVE'))[4:13])),
+        )
+
+        response = requests.get('https://www.exploit-db.com/search', headers=headers, cookies=cookies, params=params)
+        exploit_db_data = response.json()
+
+        if (exploit_db_data.get('recordsFiltered')):
+            #if an exploit exists according to exploit-DB, change the score according to the modifier.
+            is_exploit = 2
+            if str(i.get('cvss2')) != 'nan':
+                new_score = round(int(i.get('cvss2'))*1.2,1)
+
+
+            elif str(i.get('cvss3')) != 'nan':
+                new_score = round(int(i.get('cvss3'))*1.2,1)
+        else:
+            # Check NCSC advisories
+            # Python code generated using https://curl.trillworks.com/
+            headers = {
+                'Connection': 'keep-alive',
+                'sec-ch-ua': '" Not;A Brand";v="99", "Microsoft Edge";v="91", "Chromium";v="91"',
+                'Accept': '*/*',
+                'DNT': '1',
+                'sec-ch-ua-mobile': '?0',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36 Edg/91.0.864.41',
+                'Origin': 'https://www.ncsc.nl',
+                'Sec-Fetch-Site': 'same-site',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Dest': 'empty',
+                'Referer': 'https://www.ncsc.nl/',
+                'Accept-Language': 'en-GB,en;q=0.9,en-US;q=0.8,nl;q=0.7',
+                'If-None-Match': 'uGKLpiyrq30J0F62ms/w1g',
+            }
+
+            params = (
+                ('from', '01-01-2014'),
+                ('to', '15-06-2021'),
+                ('words', '{}'.format(str(i.get('CVE')))),
+                ('prob[]', ['low', 'medium', 'high']),
+                ('dmg[]', ['low', 'medium', 'high']),
+            )
+
+            # Get a list of NCSC advisories by searching for CVE-ID
+            resp = requests.get('https://advisories.ncsc.nl/ajax/search', headers=headers, params=params)
+            ncsc_data = resp.json()
+
+            # Lets checkout the 'latest' advisory
+            if(ncsc_data.get('results')):
+                latest_advisory = ncsc_data.get('results')[-1]
+
+                # Get HTML version of the advisory
+                resp = requests.get(
+                    'https://advisories.ncsc.nl/advisory?bare=1&format=undefined&id={}'.format(latest_advisory.split(' ')[0]))
+
+                # Use BeautifulSoup for some ugly parsing of the HTML
+                soup = BeautifulSoup(resp.text, 'html.parser')
+
+                #Here the modifier is calculation as a proportion of the maximum risk value that the vulnerability can have according to NCSC
+                matrix_prob_exploit_value = soup.find(id='matrix_prob_exploit').find_all('td')[1].text
+                matrix_prob_exploited_value = soup.find(id='matrix_prob_exploited').find_all('td')[1].text
+                matrix_prob_solution_value = soup.find(id='matrix_prob_solution').find_all('td')[1].text
+                modifier = int(matrix_prob_solution_value)+int(matrix_prob_exploited_value)+int(matrix_prob_exploit_value)
+                modifier = (modifier*0.25/12)+1
+                if int(matrix_prob_exploit_value) == 4:
+                    is_exploit = 1
+                if int(matrix_prob_exploit_value) == 6:
+                    is_exploit = 2
+                if int(matrix_prob_solution_value) < 3:
+                    remedy = 1
+
+                if str(i.get('cvss2')) != 'nan':
+                    new_score = round(int(i.get('cvss2')) * modifier,1)
+
+                elif str(i.get('cvss3')) != 'nan':
+                    new_score = round(int(i.get('cvss3')) * modifier,1)
+
+            else:
+                #Check VulDB files (These were downloaded beforehand, because there is a maximum of queries allowed per day)
+                exploit = 0 #0 = no exploit, 1 = poc, 2 = fully
+                countermeasure = False
+                f = open("path/to/jsonfile{}.json".format(str(i.get('CVE'))), "r")
+                vuldb = json.load(f)
+                text = str(vuldb)
+
+                import re
+
+                #here the level in which a remedy exists is loaded and stored
+                m = re.search("countermeasure':(.+?)source", text)
+                if m:
+                    found = m.group(1)
+
+                    if found[2:7] == 'Upgra':
+                        countermeasure = True
+                        remedy = 1
+
+                    else:
+                        countermeasure = False
+                else:
+                    #if no data in one of the sources, just use frei again (this did not happen in our data set):
+                    date = datetime.strptime(str(i.get('date')), '%Y-%m-%d')
+                    delta = (today - date).days
+
+                    if str(i.get('cvss2')) != 'nan':
+                        new_score = round(int(i.get('cvss2')) * (1 - (math.pow((0.00161 / delta), 0.26))), 1)
+
+
+                    elif str(i.get('cvss3')) != 'nan':
+                        new_score = round(int(i.get('cvss2')) * (1 - (math.pow((0.00161 / delta), 0.26))), 1)
+
+
+                #Here the level in which an exploit exists is loaded and stored
+                n = re.search("exploitability':(.+?)price", text)
+                if n:
+                    found = n.group(1)
+
+                    if found[2:7] == 'not d':
+                        exploit = 0
+
+                    elif found[2:7] == 'proof':
+                        exploit = 1
+                        is_exploit = 1
+
+                    else:
+                        exploit = 2
+                        is_exploit = 2
+
+                    #based on the level in which an exploit and/or remedy exists, the new score is calculated in proportion
+                    if str(i.get('cvss2')) != 'nan':
+                        if countermeasure == False:
+                            if exploit == 0: # in case of no exploit and no remedy, we use Frei et al. as fall back.
+                                new_score = round(int(i.get('cvss2')) * (1 - (math.pow((0.00161 / delta), 0.26))), 1)
+                            if exploit == 1:
+                                new_score = round(int(i.get('cvss2')) * 1.111, 1)
+                            if exploit == 2:
+                                new_score = round(int(i.get('cvss2')) * 1.167, 1)
+
+                        if countermeasure == True:
+                            if exploit == 0:
+                                new_score = round(int(i.get('cvss2')) * 1.069, 1)
+                            if exploit == 1:
+                                new_score = round(int(i.get('cvss2')) * 1.153, 1)
+                            if exploit == 2:
+                                new_score = round(int(i.get('cvss2')) * 1.208, 1)
+
+                    elif str(i.get('cvss3')) != 'nan':
+                        if countermeasure == False:
+                            if exploit == 0: # in case of no exploit and no remedy, we use Frei et al. as fall back.
+                                new_score = round(int(i.get('cvss3')) * (1 - (math.pow((0.00161 / delta), 0.26))), 1)
+                            if exploit == 1:
+                                new_score = round(int(i.get('cvss3')) * 1.111, 1)
+                            if exploit == 2:
+                                new_score = round(int(i.get('cvss3')) * 1.167, 1)
+
+                        if countermeasure == True:
+                            if exploit == 0:
+                                new_score = round(int(i.get('cvss3')) * 1.069, 1)
+                            if exploit == 1:
+                                new_score = round(int(i.get('cvss3')) * 1.153, 1)
+                            if exploit == 2:
+                                new_score = round(int(i.get('cvss3')) * 1.208, 1)
+
+    #if the vulnerability was found with the external scan, the modifier is applied on the new score
+    if i.get('scan') == 'int':
+        data = [i.get('CVE'),i.get('title'), round(i.get('cvss2'),1), round(i.get('cvss3'),1), new_score, is_exploit, remedy,round(delta/365,1)]
+    elif i.get('scan') == 'ext':
+        data = [i.get('CVE'),i.get('title'), round(i.get('cvss2'),1), round(i.get('cvss3'),1), new_score*1.2, is_exploit, remedy,round(delta/365,1)]
+
+    #reset for next iteration
+    is_exploit = 0
+    remedy = 0
+
+    #add the vulnerability with the new score to our temporary list
+    extra_list.append(data)
+
+#sort the results based on the new score
+extra_list.sort(key=lambda x: x[4],reverse=True)
+
+#write the list to the output file
+for i in extra_list:
+    writer.writerow(i)
+
+# close the file
+f.close()
+
+
+#This code could be used if the open sources did not result in any information, to consult the circl.lu database
+# # See if the CIRL API has usefull additional info
+# resp = requests.get(url="http://cve.circl.lu/api/cve/{}".format(cve_id))
+# circl_data = resp.json()
+# if (circl_data != None):
+#
+#     # Uncomment to print all circl data
+#     # pprint.pprint(circl_data)
+#     print("\nSome interesting data from CIRCL:")
+#     print("Vuln publish date: {}".format(circl_data.get('Published')))
+#     print("CVSS: {}".format(circl_data.get('cvss')))
+#     print("CVSS: {}".format(circl_data.get('cvss-vector')))
